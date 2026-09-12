@@ -1,0 +1,7 @@
+.git
+.vscode
+__lixo
+lab-config.php
+uploads
+*.sql
+!quimica.sql

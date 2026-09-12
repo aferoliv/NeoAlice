@@ -1,4 +1,32 @@
-# Laboratorio Virtual de Quimica
+# Laboratório Virtual de Química (NeoAlice)
+
+## Desenvolvimento local com Docker
+
+O único pré-requisito é o [Docker Desktop](https://www.docker.com/products/docker-desktop/) (ou Docker Engine com o plugin Docker Compose). Não é necessário instalar PHP, MySQL, Composer ou npm no computador.
+
+```bash
+git clone https://github.com/aferoliv/NeoAlice.git
+cd NeoAlice
+cp .env.example .env
+docker compose up --build
+```
+
+Abra <http://localhost:8080>. Na primeira execução, o banco de dados é criado a partir de `quimica.sql`. Para encerrar, use `docker compose down`.
+
+Em instalações antigas que disponibilizam `docker-compose` em vez de `docker compose`, substitua o comando ao longo deste guia.
+
+O login inicial é `admin` / `123456`; altere essa senha assim que entrar. Os comandos detalhados de operação e deploy estão em [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Como contribuir
+
+1. Crie um fork e uma branch com uma descrição curta: `git switch -c corrigir-login`.
+2. Faça a alteração e teste-a com `docker compose up --build`.
+3. Registre o trabalho: `git add <arquivos>` e `git commit -m "Corrige login"`.
+4. Envie a branch ao seu fork e abra um Pull Request para `main`.
+
+Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para o fluxo completo e cuidados com dados locais.
+
+## Sobre o projeto
 
 Laboratório Virtual produzido durante o proejto "Laboratório Virtual de Quimica", financiado pelo edital 03/2015 da CAPES/UAB
 
