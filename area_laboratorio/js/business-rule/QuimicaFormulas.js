@@ -6,7 +6,13 @@ class QuimicaFormulas {
      * @author wellerson
      */
     static calcularVariacao(valor, variacao) {
-        var vf = (Math.random() * variacao) - variacao;
+        // Correcao 2026-09: antes era (Math.random() * variacao) - variacao,
+        // que resulta sempre em [-variacao, 0). O erro so ia para baixo, ao
+        // contrario do que o comentario e o exemplo acima descrevem, e toda
+        // leitura saia menor que o valor real (pH no Phmetro, absorbancia no
+        // Espectrofotometro). Faltava o fator 2 para o intervalo ficar
+        // centrado em zero: [-variacao, +variacao).
+        var vf = (Math.random() * 2 * variacao) - variacao;
         return (valor + vf).toFixed(3);
     }
 

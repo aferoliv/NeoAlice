@@ -144,6 +144,17 @@ class ArmarioTabs {
             id: 12356754,
             qtd_maxima: "10"
         });
+        // A Pisseta ja existia como classe (model/objetos/Pisseta.js) e em
+        // ConceptCreate, mas nao era oferecida em lugar nenhum do armario, o
+        // que tornava inalcancaveis as interacoes Interac_Pisseta_* (lavar
+        // eletrodo do phmetro, bequer, frasco, ponteira, balao e pipeta).
+        objetos.push({
+            nome: "Pisseta",
+            conceito: "pisseta",
+            disponivel: "S",
+            id: 8873421,
+            qtd_maxima: "10"
+        });
         return objetos;
     }
 }
