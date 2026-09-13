@@ -113,7 +113,12 @@ include "lab-config.php";
                 </div>
               </div>
               <input type="password" class="form-control texto-icone" placeholder="SENHA" id="senhaCadastro">
-              <input type="hidden" id="listaTipoUsuario" value="1" />
+              <!-- Havia aqui um <input type="hidden" id="listaTipoUsuario" value="1">,
+                   com o MESMO id do <select> abaixo. Como $('#listaTipoUsuario').val()
+                   devolve o primeiro elemento do documento, todo cadastro publico era
+                   enviado com acesso=1 (perfil com acesso a area do professor).
+                   O servidor tambem ignora esse campo agora: banco/data.php sempre
+                   cadastra como aluno. -->
             </div>
 
             <div class="input-group input-group-sm margem-inferior-p1">

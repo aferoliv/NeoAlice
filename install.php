@@ -4,13 +4,56 @@
  * Arquivo de configuração
  * @version 1.0.0
  */
-error_reporting(0);
+// Antes: error_reporting(0). Erros vao para o log, nunca para a resposta.
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 include_once "classes/Conexao.class.php";
 include_once "classes/InstalacaoLab.class.php";
+include_once "classes/Seguranca.class.php";
+include_once "classes/Login.class.php";
+include_once "classes/Usuario.class.php";
+include_once "classes/Perfil.class.php";
 
-$action = $_REQUEST['action'];
-$error_message = $_REQUEST['error_message'];
-$error_title = $_REQUEST['error_title'];
+/**
+ * O instalador ficava acessivel para sempre, mesmo com o laboratorio ja no ar:
+ * dava para varrer a rede interna pelo formulario de conexao (as mensagens de
+ * erro do PDO voltavam para a tela) e reexecutar o processo de instalacao.
+ * Agora, uma vez que exista lab-config.php E o banco ja tenha tabelas, esta
+ * pagina nao faz mais nada.
+ */
+function instalacaoConcluida()
+{
+    if (!file_exists(InstalacaoLab::$config_file)) {
+        return false;
+    }
+    include_once InstalacaoLab::$config_file;
+    $db = Conexao::getInstance();
+    if (!$db) {
+        return false;
+    }
+    try {
+        $stmt = $db->query('SHOW TABLES');
+        return (bool) $stmt->fetchAll();
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+if (instalacaoConcluida()) {
+    Seguranca::abortar(
+        410,
+        "O laboratorio ja esta instalado. Se precisar reinstalar, remova "
+        . "lab-config.php e esvazie o banco de dados pelo servidor."
+    );
+}
+
+$action = isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
+$error_message = isset($_REQUEST['error_message']) ? $_REQUEST['error_message'] : '';
+$error_title = isset($_REQUEST['error_title']) ? $_REQUEST['error_title'] : '';
+$file_criar = '';
+$new_password = '';
 // Estados
 $estado = "index";
 // Verifica o estado atual do processo de instalacao
@@ -39,7 +82,9 @@ switch ($action) {
       $resp = InstalacaoLab::instalarBDProjeto();
       if ($resp['success']) {
         $estado = 'instalado';
-        $new_password = '123456';
+        // Antes era fixo em '123456'. Agora o instalador sorteia a senha do
+        // administrador e a exibe uma unica vez, nesta tela.
+        $new_password = $resp['senha_admin'];
       } else {
         header("location:install.php?error_title=Erro&error_message=" . urlencode($resp['msg']));
         exit;
@@ -91,7 +136,8 @@ switch ($action) {
               if ($error_message) {
                 ?>
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                  <?php echo "<strong>" . $error_title . ":</strong> " . $error_message; ?>
+                  <?php // Vinham da query string e eram ecoados crus (XSS refletido). ?>
+                  <?php echo "<strong>" . Seguranca::h($error_title) . ":</strong> " . Seguranca::h($error_message); ?>
                   <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                   </button>
@@ -114,7 +160,7 @@ switch ($action) {
                       <div class="input-group-prepend icone-formulario-principal">
                         <div class="input-group-text texto-icone icone-formulario-secundario"><i class="fas fa-server"></i></div>
                       </div>
-                      <input required type="text" value="<?php echo $_REQUEST['db_host']; ?>" name="db_host" class="form-control texto-icone" placeholder="Servidor">
+                      <input required type="text" value="<?php echo Seguranca::h(isset($_REQUEST['db_host']) ? $_REQUEST['db_host'] : ''); ?>" name="db_host" class="form-control texto-icone" placeholder="Servidor">
                     </div>
                   </div>
 
@@ -123,7 +169,7 @@ switch ($action) {
                       <div class="input-group-prepend icone-formulario-principal">
                         <div class="input-group-text texto-icone icone-formulario-secundario"><i class="fas fa-database"></i></div>
                       </div>
-                      <input required type="text" name="db_name" value="<?php echo $_REQUEST['db_name']; ?>" class="form-control texto-icone" placeholder="Nome do banco de dados">
+                      <input required type="text" name="db_name" value="<?php echo Seguranca::h(isset($_REQUEST['db_name']) ? $_REQUEST['db_name'] : ''); ?>" class="form-control texto-icone" placeholder="Nome do banco de dados">
                     </div>
                   </div>
 
@@ -132,7 +178,7 @@ switch ($action) {
                       <div class="input-group-prepend icone-formulario-principal">
                         <div class="input-group-text texto-icone icone-formulario-secundario"><i class="fas fa-user-tag"></i></div>
                       </div>
-                      <input value="<?php echo $_REQUEST['db_user']; ?>" required type="text" name="db_user" class="form-control texto-icone" placeholder="Usuário" id="usuarioLogin">
+                      <input value="<?php echo Seguranca::h(isset($_REQUEST['db_user']) ? $_REQUEST['db_user'] : ''); ?>" required type="text" name="db_user" class="form-control texto-icone" placeholder="Usuário" id="usuarioLogin">
                     </div>
                     <div class="input-group input-group-sm margem-inferior-p1">
                       <div class="input-group-prepend icone-formulario-principal">
@@ -157,7 +203,7 @@ switch ($action) {
                   <div class="form-group">
                     <strong></strong>
                     <label for="">Não foi possível criar o arquivo "<?php echo InstalacaoLab::$config_file;?>". Por gentileza, copie o conteudo abaixo e crie o arquivo manualmente no seguinte caminho: <?php                                                                                                                                                      ?></label>
-                    <textarea class="form-control" rows="7" style="font-family: courier; font-weight: normal"><?php echo $file_criar; ?></textarea>
+                    <textarea class="form-control" rows="7" style="font-family: courier; font-weight: normal"><?php echo Seguranca::h($file_criar); ?></textarea>
                     <button type="submit" class="btn btn-success btn-block">Continuar instalando</button>
                   </div>
                 </form>
@@ -172,7 +218,7 @@ switch ($action) {
                     Anote as credenciais abaixo. Você irá precisar delas para acessar o laboratório<br /><br />
                     <div class="alert alert-success" role="alert">
                       <strong>Usuário:</strong> admin<br />
-                      <strong>Senha:</strong> <?php echo $new_password; ?>
+                      <strong>Senha:</strong> <?php echo Seguranca::h($new_password); ?>
                     </div>
                     <button type="submit" class="btn btn-success btn-block">Acessar o laboratório</button>
                   </div>

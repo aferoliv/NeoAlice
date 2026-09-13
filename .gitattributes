@@ -1,0 +1,7 @@
+# Arquivos consumidos por Linux dentro do contêiner precisam de LF, mesmo em
+# clones feitos no Windows com core.autocrlf=true. Um CRLF aqui quebra o
+# entrypoint e pode quebrar a configuração do Apache.
+*.sh            text eol=lf
+docker/*.conf   text eol=lf
+docker/Caddyfile text eol=lf
+.htaccess       text eol=lf

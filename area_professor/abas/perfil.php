@@ -1,7 +1,7 @@
 <?php
   $objUsuario = new Usuario();
 
-  if ($_POST["acao"] == 'atualizar') {
+  if (isset($_POST["acao"]) && $_POST["acao"] == 'atualizar') {
     $_POST["id_usuario"] = $_SESSION['id_usuario'];
 
     if($_POST["senha"] == $_POST["senha2"]) {
@@ -24,7 +24,7 @@
           <div class="input-group-prepend">
             <span class="input-group-text"><i class="far fa-user"></i></span>
           </div>      
-            <input type="text" class="form-control" name="nome" placeholder="Digite seu nome..." value="<?php echo $dados["nome"]?>" required>
+            <input type="text" class="form-control" name="nome" placeholder="Digite seu nome..." value="<?php echo Seguranca::h($dados["nome"]) ?>" required>
         </div>
       </div>
       <div class="form-group col-md-4">
@@ -33,7 +33,7 @@
           <div class="input-group-prepend">
             <span class="input-group-text"><i class="far fa-user"></i></span>
           </div>      
-          <input type="text" class="form-control valida_login" name="usuario" placeholder="Digite seu nome de usuário..." value="<?php echo $dados["usuario"]?>" maxlength="16" required>
+          <input type="text" class="form-control valida_login" name="usuario" placeholder="Digite seu nome de usuário..." value="<?php echo Seguranca::h($dados["usuario"]) ?>" maxlength="16" required>
         </div>
       </div>      
       <div class="form-group col-md-4">
@@ -42,7 +42,7 @@
             <div class="input-group-prepend">
               <span class="input-group-text"><i class="far fa-envelope"></i></span>
             </div>               
-            <input type="email" class="form-control" name="email" placeholder="Digite seu e-mail..." value="<?php echo $dados["email"]?>" required>
+            <input type="email" class="form-control" name="email" placeholder="Digite seu e-mail..." value="<?php echo Seguranca::h($dados["email"]) ?>" required>
           </div>
       </div>
     </div>

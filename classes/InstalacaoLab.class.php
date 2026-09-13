@@ -16,8 +16,29 @@ class InstalacaoLab
 /**
 * As configurações básicas do Laboratorio Virtual de Quimica
 */
+
+// Cookie de sessão: HttpOnly impede leitura por JavaScript, SameSite=Lax
+// reduz CSRF, Secure só quando a requisição já veio por HTTPS.
+\$httpsAtivo = (!empty(\$_SERVER['HTTPS']) && \$_SERVER['HTTPS'] !== 'off')
+    || (isset(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && \$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
+ini_set('session.use_strict_mode', '1');
+session_set_cookie_params(array(
+    'lifetime' => 0,
+    'path' => '/',
+    'domain' => '',
+    'secure' => \$httpsAtivo,
+    'httponly' => true,
+    'samesite' => 'Lax',
+));
+
 session_start();
-error_reporting(0);
+
+// Erros vão para o log do servidor, nunca para a resposta HTTP.
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 define('DB_NAME', '%s');
 define('DB_USER', '%s');
 define('DB_PASSWORD', '%s');
@@ -74,10 +95,12 @@ include('register.php');
         $db_password = $_REQUEST['db_password'];
         $db_host = $_REQUEST['db_host'];
 
-        define('DB_NAME', $db_name);
-        define('DB_USER',  $db_user);
-        define('DB_PASSWORD', $db_password);
-        define('DB_HOST', $db_host);
+        // Guardas: lab-config.php pode ja ter sido incluido (instalacao
+        // interrompida no meio), e redefinir constante e erro.
+        if (!defined('DB_NAME')) define('DB_NAME', $db_name);
+        if (!defined('DB_USER')) define('DB_USER', $db_user);
+        if (!defined('DB_PASSWORD')) define('DB_PASSWORD', $db_password);
+        if (!defined('DB_HOST')) define('DB_HOST', $db_host);
 
         $db = Conexao::getInstance();
         // Se a conexao falhar
@@ -147,27 +170,30 @@ include('register.php');
                 TRUNCATE TABLE usuarios_cadastrados;
                 COMMIT;
             ");
-            $resp = $db->exec("
+            // Antes gravava sha1('123456') fixo aqui. Agora a senha do
+            // administrador e sorteada e devolvida para ser exibida uma vez.
+            $senhaAdmin = Usuario::gerarSenhaTemporaria();
+            $stmt = $db->prepare("
                 INSERT INTO usuarios_cadastrados
                 (nome,email,senha,id_tipo_usuario,usuario)
                 VALUES
-                ('ADMIN','admin@gmail.com','7c4a8d09ca3762af61e59520943dc26494f8941b','2','admin');
-                COMMIT;
+                ('ADMIN','admin@gmail.com',:senha,:tipo,'admin')
             ");
+            $stmt->bindValue(':senha', Login::gerarHash($senhaAdmin));
+            $stmt->bindValue(':tipo', Perfil::PROFESSOR, PDO::PARAM_INT);
+            $stmt->execute();
 
-            if (!$resp) {
-                //echo 'Error';
-            }
-            
             return array(
                 'msg' => '',
+                'senha_admin' => $senhaAdmin,
                 'success' => true
             );
         } catch (PDOException $e) {
-            die(2);
-            $error_message = $e->getMessage();
+            // Antes havia um die(2) aqui, que matava a requisicao antes de
+            // qualquer tratamento e escondia a causa real.
+            error_log('InstalacaoLab::instalarBDProjeto - ' . $e->getMessage());
             return array(
-                'msg' => 'Erro ao tentar escrever no banco de dados' . $error_message,
+                'msg' => 'Erro ao tentar escrever no banco de dados: ' . $e->getMessage(),
                 'success' => false
             );
         }

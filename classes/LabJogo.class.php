@@ -276,43 +276,11 @@ class LabJogo
         return $sql->fetchAll();
     }
 */
-    //inserir aluno novo
-    function insertAluno($nome, $email, $usuario)
-    {
-        $senha = sha1('123456');
-
-        $sql = "INSERT INTO usuarios_cadastrados (nome, email, usuario, senha, id_tipo_usuario) 
-                        VALUES (?,?,?,?, 1)";
-        $stmt1 = $this->_dbh->prepare($sql);
-        $stmt1->bindValue(1, $nome);
-        $stmt1->bindValue(2, $email);
-        $stmt1->bindValue(3, $usuario);
-        $stmt1->bindValue(4, $senha);
-
-        if ($stmt1->execute()) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-//resetar senha aluno
-    function resetarSenhaAluno($id_usuario)
-    {
-        $senha = sha1('123456');
-
-        $sql = "UPDATE usuarios_cadastrados
-                SET senha = ?
-                WHERE id_usuario = ?;";
-        $stmt1 = $this->_dbh->prepare($sql);
-        $stmt1->bindValue(1, $senha);
-        $stmt1->bindValue(2, $id_usuario);
-
-        if ($stmt1->execute()) {
-            return true;
-        } else {
-            return false;
-        }
-    }
+    // insertAluno() e resetarSenhaAluno() foram removidas na revisao de
+    // seguranca de 2026-09. Estavam sem nenhuma chamada no projeto e gravavam
+    // sha1('123456') com id_tipo_usuario = 1 (que dava acesso a area do
+    // professor). Use Usuario::insertAluno() e Usuario::resetarSenhaAluno(),
+    // que geram senha temporaria aleatoria e gravam Perfil::ALUNO.
 
 
     //Pega aulas cadastradas dentro de cada disciplina
@@ -399,9 +367,11 @@ class LabJogo
     }
 
 
+    // Antes devolvia sha1($senha), sem sal. Agora delega para o unico ponto
+    // de geracao de hash do sistema (bcrypt via password_hash).
     function codificarSenha($senha)
     {
-        return sha1($senha);
+        return Login::gerarHash($senha);
     }
 
     function setPerfil($nome, $senha, $email, $id_usuario)

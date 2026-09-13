@@ -24,7 +24,8 @@ $pratica_s = $objModeloPratica->getPraticaPorCod($_REQUEST['id_pratica']);
     const ID_USUARIO = parseInt('<?php echo $login['id_usuario'] ?>');
     const TIPO_USUARIO = parseInt('<?php echo $login['tipo_usuario'] ?>');
     const ID_PRATICA = parseInt('<?php echo $pratica_s['id_modelo_pratica']; ?>');
-    const TIPO_ACESSO = '<?php echo $_REQUEST['tipo_acesso']; ?>';
+    // Vem da URL: json_encode escapa aspas e < > (antes era XSS refletido).
+    const TIPO_ACESSO = <?php echo json_encode(isset($_REQUEST['tipo_acesso']) ? (string) $_REQUEST['tipo_acesso'] : '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
   </script>
 
   <!-- jquery -->

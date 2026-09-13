@@ -1,6 +1,15 @@
 <?php
 try {
-    $banco = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8", DB_USER, DB_PASSWORD);
+    $banco = new PDO(
+        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8",
+        DB_USER,
+        DB_PASSWORD,
+        array(
+            // Sem isto o PDO falha em silencio: os varios catch (PDOException)
+            // espalhados pelo projeto nunca disparavam.
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        )
+    );
     $dbh = $banco;
 } catch (PDOException $e) {
     $error_message = $e->getMessage();

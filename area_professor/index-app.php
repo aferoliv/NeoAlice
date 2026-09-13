@@ -3,7 +3,14 @@
  * @author Wellerson
  */
 include_once ("../lab-config.php");
-Login::$permissao_usuario = [1,2];
+Login::$permissao_usuario = Perfil::professores();
 Login::checkUser();
-include_once URL_SYSTEM."area_professor/app/".$_GET['app'].'/'.$_GET['file'].'.php';
+
+// "app" e "file" vinham da URL e eram concatenados direto no include
+// (path traversal / LFI). Agora precisam resolver para um arquivo real
+// dentro de area_professor/app.
+Seguranca::incluirRota(URL_SYSTEM . 'area_professor/app', array(
+    isset($_GET['app']) ? $_GET['app'] : '',
+    isset($_GET['file']) ? $_GET['file'] : ''
+));
 ?>

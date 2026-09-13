@@ -233,7 +233,7 @@ CREATE TABLE `tipo_usuario` (
 
 LOCK TABLES `tipo_usuario` WRITE;
 /*!40000 ALTER TABLE `tipo_usuario` DISABLE KEYS */;
-INSERT INTO `tipo_usuario` VALUES (1,'Admin'),(2,'Professor'),(3,'Aluno');
+INSERT INTO `tipo_usuario` VALUES (1,'Aluno (legado)'),(2,'Professor'),(3,'Aluno');
 /*!40000 ALTER TABLE `tipo_usuario` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -248,7 +248,7 @@ CREATE TABLE `usuarios_cadastrados` (
   `id_usuario` int(11) NOT NULL AUTO_INCREMENT,
   `nome` varchar(45) DEFAULT NULL,
   `email` varchar(45) DEFAULT NULL,
-  `senha` varchar(45) NOT NULL,
+  `senha` varchar(255) NOT NULL,
   `id_tipo_usuario` int(11) DEFAULT NULL,
   `usuario` varchar(45) NOT NULL,
   `data_cadastro` timestamp NULL DEFAULT CURRENT_TIMESTAMP,

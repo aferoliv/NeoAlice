@@ -9,6 +9,24 @@ This repository now runs as two containers:
 
 The JavaScript, Phaser simulator, CSS, fonts, and other browser dependencies are already committed to this repository. No Composer, npm, or web build command is required.
 
+## Upgrading an existing installation (September 2026 security review)
+
+If you are updating a server that was installed before the September 2026
+security review, run the database migration once, after pulling the new code:
+
+```bash
+docker compose exec db mysqldump -u root -p quimica > backup-before-migration.sql
+docker compose exec -T db mysql -u root -p quimica < banco/migracoes/2026-09-13-seguranca.sql
+```
+
+The migration widens the password column so bcrypt hashes fit. Without it,
+accounts keep working but stay on the old SHA-1 hashes.
+
+One step in that file is intentionally left commented out because it changes
+who can reach the teacher area. Read `SECURITY-FIXES.md` (sections 1 and 2)
+before running it, and check `APP_BIND_ADDRESS` in your `.env`: the default is
+now `127.0.0.1` so the app is reachable only through the HTTPS proxy.
+
 ## Local setup
 
 1. Install Docker Engine and the Docker Compose plugin.

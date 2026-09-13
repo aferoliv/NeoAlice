@@ -1,12 +1,30 @@
 <?php
   $objUsuario = new Usuario();
-  if ($_POST["acao"] == 'salvar') {
-    if($objUsuario->insertAluno($_POST)) {
-      if ($_GET["cadastro"] == 'ok')
-        echo ('<div class="alert alert-success" role="alert">Aluno salvo com sucesso! A senha padrão é 123456, aconselhe seus alunos a alterarem a senha no primeiro acesso.</div>');
-      }
+  $senhaTemporaria = null;
+  $erroCadastro = null;
+
+  if (isset($_POST["acao"]) && $_POST["acao"] == 'salvar') {
+    // insertAluno devolve a senha temporária gerada para este aluno.
+    // Antes a senha era sempre "123456" e o erro de cadastro era silencioso.
+    $senhaTemporaria = $objUsuario->insertAluno($_POST);
+    if ($senhaTemporaria === null) {
+      $erroCadastro = 'Não foi possível cadastrar o aluno. Confira os dados: '
+        . 'o login deve ter de 3 a 16 letras ou números e não pode já existir, '
+        . 'e o e-mail precisa ser válido.';
+    }
   }
 ?>
+<?php if ($senhaTemporaria !== null) { ?>
+  <div class="alert alert-success" role="alert">
+    Aluno salvo com sucesso! A senha temporária é
+    <strong><?php echo Seguranca::h($senhaTemporaria); ?></strong> &mdash;
+    anote e entregue ao aluno, porque ela não será exibida de novo.
+    Oriente-o a trocá-la no primeiro acesso.
+  </div>
+<?php } ?>
+<?php if ($erroCadastro !== null) { ?>
+  <div class="alert alert-danger" role="alert"><?php echo Seguranca::h($erroCadastro); ?></div>
+<?php } ?>
 
 <div class="container">
   <div class="row">
@@ -58,12 +76,12 @@
               foreach ($dados as $row) {
           ?>
               <tr>
-                <td><?php echo $row['usuario'] ?></td>
-                <td><?php echo $row['nome'] ?></td>
-                <td><?php echo $row['email'] ?></td>
+                <td><?php echo Seguranca::h($row['usuario']) ?></td>
+                <td><?php echo Seguranca::h($row['nome']) ?></td>
+                <td><?php echo Seguranca::h($row['email']) ?></td>
                 <td>
-                  <button class='btn btn-warning reset_senha' cod-usuario='<?php echo $row["id_usuario"] ?>'>Resetar</button>
-                  <button class='btn btn-danger delete_user' cod-usuario='<?php echo $row["id_usuario"] ?>'>Deletar</button>
+                  <button class='btn btn-warning reset_senha' cod-usuario='<?php echo Seguranca::h($row["id_usuario"]) ?>'>Resetar</button>
+                  <button class='btn btn-danger delete_user' cod-usuario='<?php echo Seguranca::h($row["id_usuario"]) ?>'>Deletar</button>
                 </td>
               </tr>
           <?php

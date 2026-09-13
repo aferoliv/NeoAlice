@@ -1,9 +1,18 @@
 <?php
 include('../lab-config.php');
 include_once(URL_SYSTEM . 'banco/conexao.php');
-Login::$permissao_usuario = [1, 2, 3];
+Login::$permissao_usuario = Perfil::todos();
 Login::checkUser();
+
+// A aba vem da URL. So e aceita se resolver para um arquivo real dentro de
+// area_aluno/abas; qualquer outra coisa volta para o inicio. Antes esta
+// variavel ia direta para o include (path traversal / LFI).
 $aba_s = (empty($_REQUEST['aba'])) ? "inicio" : $_REQUEST['aba'];
+$aba_arquivo = Seguranca::resolverArquivo(URL_SYSTEM . 'area_aluno/abas', array($aba_s));
+if ($aba_arquivo === null) {
+    $aba_s = "inicio";
+    $aba_arquivo = Seguranca::resolverArquivo(URL_SYSTEM . 'area_aluno/abas', array($aba_s));
+}
 include(URL_SYSTEM . 'area_aluno/header.php');
 $sessao = Login::getSession();
 ?>
@@ -31,7 +40,7 @@ $sessao = Login::getSession();
 
       <section class="conteudoabas">
         <div class="section">
-          <?php include("abas/" . $aba_s . ".php") ?>
+          <?php include($aba_arquivo); ?>
         </div>
       </section>
     </div>

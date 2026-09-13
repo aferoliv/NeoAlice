@@ -1,0 +1,19 @@
+# Endurecimento para instalações FORA do Docker (Apache com AllowOverride
+# habilitado). Na imagem Docker quem vale é docker/security.conf, porque
+# php:7.4-apache usa AllowOverride None e ignora este arquivo.
+
+Options -Indexes
+
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(sql|md|ya?ml|sh|log|bak|dist|example|ini)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^(Dockerfile|LICENSE|info\.php)$">
+    Require all denied
+</FilesMatch>
+
+RedirectMatch 404 ^/(\.git|\.github|\.vscode|__lixo|docker|banco/migracoes)/

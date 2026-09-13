@@ -1,6 +1,28 @@
 <?php
+// Cookie de sessão: HttpOnly impede leitura por JavaScript, SameSite=Lax
+// reduz CSRF e Secure só é ligado quando a requisição já chegou por HTTPS
+// (atrás do Caddy, quem informa isso é X-Forwarded-Proto).
+$httpsAtivo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
+ini_set('session.use_strict_mode', '1');
+session_set_cookie_params(array(
+    'lifetime' => 0,
+    'path' => '/',
+    'domain' => '',
+    'secure' => $httpsAtivo,
+    'httponly' => true,
+    'samesite' => 'Lax',
+));
+
 session_start();
-error_reporting(0);
+
+// Antes: error_reporting(0). Qualquer erro virava página em branco sem
+// registro nenhum. Agora os erros vão para o log do container
+// (docker compose logs web) e continuam fora da resposta HTTP.
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 define('DB_NAME', getenv('DB_NAME') ?: 'quimica');
 define('DB_USER', getenv('DB_USER') ?: 'nealice');

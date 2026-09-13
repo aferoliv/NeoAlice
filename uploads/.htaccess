@@ -1,0 +1,9 @@
+# Nada neste diretório pode ser executado como script.
+# Redundante com docker/security.conf (que é o que vale na imagem Docker),
+# mantido aqui para instalações fora do Docker com AllowOverride habilitado.
+php_flag engine off
+Options -ExecCGI -Indexes
+AddType text/plain .php .phtml .php3 .php4 .php5 .php7 .phps .pl .py .cgi .sh
+<FilesMatch "\.(?i:php|phtml|php[0-9]|phps|pl|py|cgi|sh)$">
+    Require all denied
+</FilesMatch>

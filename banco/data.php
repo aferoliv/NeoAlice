@@ -5,8 +5,17 @@ include('conexao.php');
 // TODO: Verificar se vale a pena usar input_post por questoes de seguranca
 //$comandos = filter_input_array(INPUT_POST, FILTER_DEFAULT);
 $comandos = $_REQUEST;
+$acao = isset($comandos['acao']) ? $comandos['acao'] : '';
 
-switch ($comandos['acao']) {
+// Login e cadastro carregam credenciais e alteram estado: so por POST.
+// Antes aceitavam GET, o que deixava a senha no log do Apache, no historico
+// do navegador e no cabecalho Referer.
+if (in_array($acao, array('validar_login', 'cadastrar_usuario'), true)
+	&& $_SERVER['REQUEST_METHOD'] !== 'POST') {
+	Seguranca::abortar(405, 'Metodo nao permitido.');
+}
+
+switch ($acao) {
 	case "buscar-dados-substancia":
 		buscar($comandos['substancia']);
 		break;
@@ -16,11 +25,22 @@ switch ($comandos['acao']) {
 		break;
 
 	case "validar_login":
-		Login::logar($comandos['usuario'], $comandos['senha']);
+		Login::logar(
+			isset($comandos['usuario']) ? $comandos['usuario'] : '',
+			isset($comandos['senha']) ? $comandos['senha'] : ''
+		);
 		break;
 
 	case "cadastrar_usuario":
-		cadastrarUsuario($comandos['nome'], $comandos['email'], $comandos['usuario'], $comandos['senha'], $comandos['acesso']);
+		// O perfil NAO vem mais da requisicao. Antes o campo "acesso" era
+		// gravado direto em id_tipo_usuario, permitindo que qualquer visitante
+		// se cadastrasse como professor/administrador.
+		cadastrarUsuario(
+			isset($comandos['nome']) ? $comandos['nome'] : '',
+			isset($comandos['email']) ? $comandos['email'] : '',
+			isset($comandos['usuario']) ? $comandos['usuario'] : '',
+			isset($comandos['senha']) ? $comandos['senha'] : ''
+		);
 		break;
 
 	case "carregar_id_pratica":
@@ -28,6 +48,11 @@ switch ($comandos['acao']) {
 		break;
 
 	case "carregar_alunos":
+		// Devolve nome e e-mail de todos os alunos: estava publico.
+		Login::$permissao_usuario = Perfil::professores();
+		if (!Login::logado()) {
+			Seguranca::abortar(403, 'Acesso negado.');
+		}
 		carregarAlunos();
 		break;
 
@@ -35,14 +60,22 @@ switch ($comandos['acao']) {
 		nome_disciplina();
 		break;
 
-		break;
+	default:
+		Seguranca::abortar(400, 'Acao desconhecida.');
 }
 function nome_disciplina()
 {
 	header("Content-type: application/json; charset=utf-8");
 	global $banco;
+
+	// Escreve na sessao do usuario: exige estar logado.
+	Login::$permissao_usuario = Perfil::todos();
+	if (!Login::logado()) {
+		Seguranca::abortar(403, 'Acesso negado.');
+	}
+
 	try {
-		session_start();
+		// session_start() ja foi chamado em lab-config.php
 		$_SESSION['disciplina'] = @$_REQUEST['nomedisciplina'];
 		$_SESSION['id_disciplina'] = @$_REQUEST['id_disciplina'];
 		echo json_encode($_SESSION['disciplina']);
@@ -55,7 +88,10 @@ function carregarAlunos()
 {
 	global $banco;
 	try {
-		$consulta = $banco->prepare('select id_usuario, nome, email, usuario from usuarios_cadastrados WHERE id_tipo_usuario=1');
+		// Aceita o tipo 3 (aluno) e o tipo 1 (aluno legado). Antes so o 1.
+		$consulta = $banco->prepare('select id_usuario, nome, email, usuario from usuarios_cadastrados WHERE id_tipo_usuario IN (:aluno, :legado)');
+		$consulta->bindValue(':aluno', Perfil::ALUNO, PDO::PARAM_INT);
+		$consulta->bindValue(':legado', Perfil::ALUNO_LEGADO, PDO::PARAM_INT);
 		$consulta->execute();
 		$praticas = $consulta->fetchAll(PDO::FETCH_ASSOC);
 		$json = array(
@@ -150,47 +186,66 @@ function carregarDadosPratica($id)
 	}
 }
 
-// Cadastro de novo usuário
-function cadastrarUsuario($nome, $email, $user, $pass, $acesso)
+// Cadastro de novo usuário.
+// Cria SEMPRE um aluno: o perfil nunca vem da requisição.
+function cadastrarUsuario($nome, $email, $user, $pass)
 {
 	global $banco;
+	header('Content-Type: application/json; charset=utf-8');
 	try {
-		// Validação dos dados de cadastro
-		if (strlen($pass) < 5) {
-			echo json_encode(array('sucesso' => false, 'log' => 'Senha muito curta, falha no cadastro.'));
-		} elseif (!userValido($user)) {
-			echo json_encode(array('sucesso' => false, 'log' => 'Nome de usuário já existente, falha no cadastro.'));
-		} else {
-			// Cadastra o novo usuário no banco de dados
-			$consulta = $banco->prepare('INSERT INTO usuarios_cadastrados (nome, email, usuario, senha, id_tipo_usuario) VALUES(:nome, :email, :usuario, :senha, :id_tipo_usuario)');
-			$consulta->execute(array(
-				':nome' => $nome,
-				':email' => $email,
-				':usuario' => $user,
-				':senha' => sha1($pass),
-				':id_tipo_usuario' => intval($acesso)
-			));
-			echo json_encode(array('sucesso' => true, 'log' => 'Cadastro realizado com sucesso. Fique a vontade para utilizar o sistema.'));
+		// Validação dos dados de cadastro (antes só existia no JavaScript)
+		$nome = trim((string) $nome);
+		$email = trim((string) $email);
+		$user = trim((string) $user);
+		$pass = (string) $pass;
+
+		if ($nome === '' || mb_strlen($nome) > 45) {
+			echo json_encode(array('sucesso' => false, 'log' => 'Informe um nome válido.'));
+			return;
 		}
+		if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 45) {
+			echo json_encode(array('sucesso' => false, 'log' => 'Informe um endereço de e-mail válido.'));
+			return;
+		}
+		if (!preg_match('/^[A-Za-z0-9]{3,16}$/', $user)) {
+			echo json_encode(array('sucesso' => false, 'log' => 'O nome de usuário deve ter de 3 a 16 letras ou números.'));
+			return;
+		}
+		if (strlen($pass) < 8) {
+			echo json_encode(array('sucesso' => false, 'log' => 'A senha deve ter ao menos 8 caracteres.'));
+			return;
+		}
+		if (!userValido($user)) {
+			echo json_encode(array('sucesso' => false, 'log' => 'Nome de usuário já existente, falha no cadastro.'));
+			return;
+		}
+
+		// Cadastra o novo usuário no banco de dados
+		$consulta = $banco->prepare('INSERT INTO usuarios_cadastrados (nome, email, usuario, senha, id_tipo_usuario) VALUES(:nome, :email, :usuario, :senha, :id_tipo_usuario)');
+		$consulta->execute(array(
+			':nome' => $nome,
+			':email' => $email,
+			':usuario' => $user,
+			':senha' => Login::gerarHash($pass),
+			':id_tipo_usuario' => Perfil::ALUNO
+		));
+		echo json_encode(array('sucesso' => true, 'log' => 'Cadastro realizado com sucesso. Fique a vontade para utilizar o sistema.'));
 	} catch (PDOException $e) {
-		echo json_encode(array('sucesso' => false, 'log' => $e->getMessage()));
+		// A coluna `usuario` tem índice UNIQUE: duas requisições simultâneas
+		// com o mesmo login caem aqui em vez de criar duplicata.
+		error_log('cadastrarUsuario - ' . $e->getMessage());
+		echo json_encode(array('sucesso' => false, 'log' => 'Não foi possível concluir o cadastro.'));
 	}
 }
 
-// Função auxiliar que valida existência de usuário
+// Função auxiliar que valida existência de usuário.
+// Antes carregava a tabela inteira de usuários e comparava em PHP.
 function userValido($user)
 {
 	global $banco;
-	$consulta = $banco->prepare('SELECT usuario FROM usuarios_cadastrados');
-	$consulta->execute();
-	$resultado = $consulta->fetchAll(PDO::FETCH_ASSOC);
-	$valido = true;
-	foreach ($resultado as $usuario) {
-		if ($user === $usuario['usuario']) {
-			$valido = false;
-		}
-	}
-	return $valido;
+	$consulta = $banco->prepare('SELECT 1 FROM usuarios_cadastrados WHERE usuario = :usuario LIMIT 1');
+	$consulta->execute(array(':usuario' => $user));
+	return $consulta->fetchColumn() === false;
 }
 
 

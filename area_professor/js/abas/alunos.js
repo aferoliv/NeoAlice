@@ -22,8 +22,18 @@ $(document).ready(function () {
                     type: "POST",
                     url: URL_SITE + 'area_professor/index-app.php?app=usuario&file=reset-senha-aluno',
                     data: dados,
+                    dataType: 'json',
+                    // A senha nova e aleatoria e so aparece aqui, uma vez.
                     success: function (data) {
-                        bootbox.alert('Senha alterada com sucesso para 123456');
+                        if (data && data.success) {
+                            bootbox.alert(
+                                'Senha redefinida. A senha temporária é <strong>' +
+                                $('<div>').text(data.senha).html() +
+                                '</strong>. Anote e entregue ao aluno: ela não será exibida de novo.'
+                            );
+                        } else {
+                            bootbox.alert((data && data.msg) || 'Não foi possível resetar a senha.');
+                        }
                     }
                 });
             },
@@ -43,10 +53,15 @@ $(document).ready(function () {
                     type: "POST",
                     url: URL_SITE + 'area_professor/index-app.php?app=usuario&file=delete-aluno',
                     data: dados,
+                    dataType: 'json',
                     success: function (data) {
-                        bootbox.alert('Aluno deletado com sucesso!!', function(){
-                            window.location.href = URL_SITE+'area_professor/index.php?aba=alunos';
-                        });
+                        if (data && data.success) {
+                            bootbox.alert('Aluno deletado com sucesso!!', function(){
+                                window.location.href = URL_SITE+'area_professor/index.php?aba=alunos';
+                            });
+                        } else {
+                            bootbox.alert((data && data.msg) || 'Não foi possível remover o aluno.');
+                        }
                     }
                 });
             },
