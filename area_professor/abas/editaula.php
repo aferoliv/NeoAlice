@@ -83,6 +83,7 @@ if (!empty($_GET['id_pratica'])) {
 }
 ?>
 <form action="" method="post" id="formlulario-edita-aula">
+<?php echo Seguranca::campoCsrf(); ?>
   <div class="container">
     <div class="row">
       <div class="col-md-12">

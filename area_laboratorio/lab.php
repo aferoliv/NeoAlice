@@ -31,6 +31,8 @@ $pratica_s = $objModeloPratica->getPraticaPorCod($_REQUEST['id_pratica']);
   <!-- jquery -->
   <script src="<?php echo URL_SITE; ?>plugins/vendor/jquery/3.4/jquery-3.4.1.min.js"></script>
   <script src="<?php echo URL_SITE; ?>plugins/vendor/jquery/3.4/jquery-migrate-1.4.1.min.js"></script>
+  <?php echo Seguranca::scriptCsrf(); ?>
+  <script src="<?php echo URL_SITE; ?>js/csrf.js"></script>
 
   <!-- bootstrap -->
   <script src="<?php echo URL_SITE; ?>plugins/vendor/bootstrap/4.3.1/dist/js/bootstrap.min.js"></script>

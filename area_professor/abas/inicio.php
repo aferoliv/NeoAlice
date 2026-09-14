@@ -1,7 +1,7 @@
 <?php
 $objDisciplina = new Disciplina();
 
-if ($_POST["acao"] == 'salvarDisciplina') {
+if (isset($_POST["acao"]) && $_POST["acao"] == 'salvarDisciplina') {
   $objDisciplina->insertDisciplina($_POST);
 }
 ?>
@@ -23,6 +23,7 @@ if ($_POST["acao"] == 'salvarDisciplina') {
           <div class="card card-body">
             <div class="col-md-12">
               <form id="formulario" method="post" action="<?php echo URL_SITE; ?>area_professor/index.php?aba=inicio" enctype="multipart/form-data">
+              <?php echo Seguranca::campoCsrf(); ?>
                 <div class="form-group">
                   <label><b>Nome da disciplina:</b></label>
                   <input autofocus id="nome_disciplina" name="nome_disciplina" class="form-control" type="text" placeholder="Digite o nome" required>

@@ -5,6 +5,7 @@
 include('../lab-config.php');
 Login::$permissao_usuario = Perfil::professores();
 Login::checkUser();
+Seguranca::exigirCsrfEmPost();
 include_once(URL_SYSTEM.'banco/conexao.php');
 
 // Roteador XHR da area do professor (usado por js/abas/editaula.js).

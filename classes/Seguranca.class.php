@@ -80,4 +80,81 @@ class Seguranca
     {
         return htmlspecialchars((string) $texto, ENT_QUOTES, 'UTF-8');
     }
+
+    // ---------------------------------------------------------------------
+    // CSRF
+    //
+    // Antes desta revisao o projeto nao tinha token nenhum: qualquer POST
+    // (apagar aluno, resetar senha, trocar perfil, subir arquivo) podia ser
+    // forjado por uma pagina de terceiros visitada por quem estava logado.
+    //
+    // O token e por sessao. Ele viaja de duas formas:
+    //  - campo oculto "_csrf" nos formularios HTML comuns;
+    //  - cabecalho "X-CSRF-Token" nas chamadas jQuery (injetado por
+    //    js/csrf.js em todo POST, o que cobre tambem FormData de upload).
+    // ---------------------------------------------------------------------
+
+    const CAMPO_CSRF = '_csrf';
+    const HEADER_CSRF = 'HTTP_X_CSRF_TOKEN';
+
+    /** Devolve o token da sessao, criando na primeira chamada. */
+    public static function tokenCsrf()
+    {
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf_token'];
+    }
+
+    /** Campo oculto para embutir num <form>. */
+    public static function campoCsrf()
+    {
+        return '<input type="hidden" name="' . self::CAMPO_CSRF . '" value="'
+            . self::h(self::tokenCsrf()) . '">';
+    }
+
+    /** Token valido na requisicao atual? */
+    public static function csrfValido()
+    {
+        if (empty($_SESSION['csrf_token'])) {
+            return false;
+        }
+
+        $enviado = '';
+        if (isset($_POST[self::CAMPO_CSRF])) {
+            $enviado = (string) $_POST[self::CAMPO_CSRF];
+        } elseif (isset($_SERVER[self::HEADER_CSRF])) {
+            $enviado = (string) $_SERVER[self::HEADER_CSRF];
+        }
+
+        if ($enviado === '') {
+            return false;
+        }
+
+        return hash_equals($_SESSION['csrf_token'], $enviado);
+    }
+
+    /**
+     * Em requisicao POST, exige token valido. Metodos de leitura passam.
+     * Chamada nos roteadores, logo depois de Login::checkUser().
+     */
+    public static function exigirCsrfEmPost()
+    {
+        if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return;
+        }
+        if (!self::csrfValido()) {
+            error_log('CSRF invalido em ' . (isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '?'));
+            self::abortar(403, 'Requisicao invalida ou expirada. Recarregue a pagina e tente de novo.');
+        }
+    }
+
+    /** Bloco <script> com o token, para o js/csrf.js usar. */
+    public static function scriptCsrf()
+    {
+        return '<script>const CSRF_TOKEN = ' . json_encode(
+            self::tokenCsrf(),
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        ) . ';</script>';
+    }
 }

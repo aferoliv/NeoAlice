@@ -14,6 +14,13 @@ class Login
 {
     static $permissao_usuario;
 
+    /**
+     * Senhas que o sistema distribui de fabrica. Quem entra com uma delas e
+     * obrigado a trocar antes de usar o laboratorio (ver $_SESSION['trocar_senha']).
+     * O usuario "admin" do dump quimica.sql nasce com "123456".
+     */
+    const SENHAS_PADRAO = array('123456');
+
     /** Hash descartavel para igualar o tempo de resposta de usuario inexistente. */
     const HASH_DUMMY = '$2y$10$o23TFLQnb609iN3zw3VJcOeknFpe4Ro7VousZ1eBucUteInqY.7mi';
 
@@ -25,6 +32,13 @@ class Login
         header('Content-Type: application/json; charset=utf-8');
 
         try {
+            // Freio de forca bruta, antes de qualquer consulta de senha.
+            $bloqueio = LimiteLogin::motivoBloqueio($user);
+            if ($bloqueio !== null) {
+                echo json_encode(array('sucesso' => false, 'log' => $bloqueio));
+                return;
+            }
+
             // Busca usuario no banco pelo login apenas; a senha e conferida em PHP.
             $consulta = $banco->prepare('SELECT nome, id_tipo_usuario, usuario, id_usuario, email, senha FROM usuarios_cadastrados WHERE usuario = :usuario');
             $consulta->execute(array(':usuario' => $user));
@@ -33,15 +47,19 @@ class Login
             if (empty($resultado)) {
                 // Gasta o mesmo tempo de um usuario existente.
                 password_verify((string) $pass, self::HASH_DUMMY);
+                LimiteLogin::registrarFalha($user);
                 echo json_encode(array('sucesso' => false, 'log' => 'Usuario ou senha invalidos.'));
                 return;
             }
 
             $armazenado = (string) $resultado['senha'];
             if (!self::conferirSenha($pass, $armazenado)) {
+                LimiteLogin::registrarFalha($user);
                 echo json_encode(array('sucesso' => false, 'log' => 'Usuario ou senha invalidos.'));
                 return;
             }
+
+            LimiteLogin::limparSucesso($user);
 
             // Senha correta. Se ainda estiver no formato antigo, reescreve.
             self::migrarHashSeNecessario($resultado['id_usuario'], $pass, $armazenado);
@@ -56,6 +74,9 @@ class Login
             $_SESSION['id_usuario'] = $resultado['id_usuario'];
             $_SESSION['tipo_usuario'] = $tipo;
             $_SESSION['administrador'] = ($tipo === Perfil::PROFESSOR);
+
+            // Entrou com senha de fabrica: so sai da tela de perfil depois de trocar.
+            $_SESSION['trocar_senha'] = self::senhaEhPadrao($pass);
 
             echo json_encode(array('sucesso' => true, 'log' => 'Login realizado com sucesso.', 'tipo' => $tipo));
         } catch (PDOException $e) {
@@ -108,6 +129,18 @@ class Login
             error_log('Login: falha ao migrar hash do usuario ' . $idUsuario
                 . ' (rode banco/migracoes/2026-09-13-seguranca.sql) - ' . $e->getMessage());
         }
+    }
+
+    /** A senha informada e uma das que o sistema distribui de fabrica? */
+    public static function senhaEhPadrao($senha)
+    {
+        return in_array((string) $senha, self::SENHAS_PADRAO, true);
+    }
+
+    /** Precisa trocar a senha antes de usar o resto do sistema? */
+    public static function precisaTrocarSenha()
+    {
+        return !empty($_SESSION['trocar_senha']);
     }
 
     /** Gera o hash de uma senha nova. Ponto unico usado por todo o sistema. */

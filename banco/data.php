@@ -15,6 +15,10 @@ if (in_array($acao, array('validar_login', 'cadastrar_usuario'), true)
 	Seguranca::abortar(405, 'Metodo nao permitido.');
 }
 
+// Todo POST precisa do token da sessao. O token e emitido tambem para visitante
+// anonimo (index.php), entao login e cadastro tambem sao cobertos.
+Seguranca::exigirCsrfEmPost();
+
 switch ($acao) {
 	case "buscar-dados-substancia":
 		buscar($comandos['substancia']);

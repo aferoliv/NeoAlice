@@ -36,6 +36,7 @@
         <br>
         <div class="collapse" id="adicionarAluno">
           <form id="aluno" name="aluno" method="post" action="<?php echo URL_SITE; ?>area_professor/index.php?aba=alunos&cadastro=ok" enctype="multipart/form-data">
+          <?php echo Seguranca::campoCsrf(); ?>
             <table class="table">
               <thead>
                 <tr>

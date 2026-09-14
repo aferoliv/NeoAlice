@@ -7,6 +7,7 @@ include_once ("../lab-config.php");
 // area_laboratorio/app estavam abertos ao publico.
 Login::$permissao_usuario = Perfil::todos();
 Login::checkUser();
+Seguranca::exigirCsrfEmPost();
 
 // "app" e "file" vinham da URL e eram concatenados direto no include
 // (path traversal / LFI).

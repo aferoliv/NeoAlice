@@ -53,6 +53,7 @@ if (!empty($_GET['cod_moprsi'])) {
 
 ?>
 <form method="post" id="form-solucoes">
+<?php echo Seguranca::campoCsrf(); ?>
     <?php if (empty($_GET['cod_moprsi'])) { ?>
         <input type="hidden" value="insert" name="acao" />
     <?php } else { ?>

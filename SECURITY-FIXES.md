@@ -3,6 +3,11 @@
 Branch: `corrigir-login`. Este documento descreve o que foi encontrado, o que
 foi alterado e o que ainda falta, para avaliação antes do merge em `main`.
 
+> **Segunda rodada (14/09).** Depois da primeira leitura foram fechados mais
+> quatro pontos: proteção CSRF (seção 3.16), remoção de dez endpoints que
+> apagavam dados por GET (3.17), troca obrigatória da senha padrão (3.18) e
+> limite de tentativas de login (3.19). **São duas migrações agora** — veja 1.1.
+
 **Resumo:** o laboratório tinha uma cadeia de falhas que levava de visitante
 anônimo a execução de código no servidor, além de escalada de privilégio no
 cadastro público e exposição do `.env` e do `.git/` pela web. Todas foram
@@ -14,17 +19,27 @@ corrigidas e verificadas com o ambiente rodando.
 
 Três passos manuais. Sem eles, parte das correções não tem efeito.
 
-### 1.1 Rodar a migração do banco (obrigatório)
+### 1.1 Rodar as migrações do banco (obrigatório)
 
 ```bash
 # backup primeiro
 docker compose exec db mysqldump -u root -p quimica > backup-antes.sql
 
 docker compose exec -T db mysql -u root -p quimica < banco/migracoes/2026-09-13-seguranca.sql
+docker compose exec -T db mysql -u root -p quimica < banco/migracoes/2026-09-14-csrf-e-rate-limit.sql
 ```
 
-O arquivo está comentado passo a passo. **O passo 3 mexe em permissão de
-acesso e está desativado de propósito** — leia a seção 2.1 antes.
+São duas, nessa ordem. A segunda só cria a tabela `login_tentativas` (aditiva,
+não altera nada existente).
+
+O primeiro arquivo está comentado passo a passo. **O passo 3 dele mexe em
+permissão de acesso e está desativado de propósito** — leia a seção 2.1 antes.
+
+Ambas foram testadas contra um banco criado a partir do dump ANTIGO, com um
+usuário tipo 1 dentro, para conferir o caminho de atualização de uma instalação
+já existente. Resultado: coluna `senha` ampliada, rótulos de `tipo_usuario`
+corrigidos, `login_tentativas` criada, hashes SHA-1 preservados e o usuário
+tipo 1 intacto (porque o passo 3 continua comentado).
 
 Sem o passo 1 da migração (`ALTER TABLE ... senha VARCHAR(255)`), a coluna
 `senha` continua `varchar(45)` e não cabe um hash bcrypt (60 caracteres). O
@@ -33,9 +48,14 @@ no log — não quebra, mas a migração de senha nunca se completa.
 
 ### 1.2 Trocar a senha do administrador
 
-O usuário `admin` nasce com `123456` no `quimica.sql`. Entre no laboratório e
-troque em *Meu perfil* imediatamente. Ao fazer login a senha é automaticamente
-reconvertida para bcrypt, mas o valor continua sendo `123456` até ser trocado.
+O usuário `admin` continua nascendo com `123456` no `quimica.sql`. **O sistema
+agora obriga a troca:** quem entra com uma senha de fábrica cai na aba *Meu
+perfil* e não sai dela — as outras abas ficam bloqueadas — até definir uma senha
+nova, com no mínimo 8 caracteres e diferente da padrão.
+
+Isso não dispensa trocar a senha logo no primeiro acesso: enquanto ela for
+`123456`, qualquer pessoa consegue entrar na conta (e vai cair na mesma tela de
+troca, podendo tomar a conta antes de você).
 
 ### 1.3 Conferir `APP_BIND_ADDRESS` no `.env` do servidor
 
@@ -276,6 +296,91 @@ Em `LabJogo`, `insertAluno()` e `resetarSenhaAluno()` (sem chamadas, gravavam
 `sha1('123456')` com tipo 1) foram removidas, com comentário apontando para as
 equivalentes em `Usuario`.
 
+### 3.16 ALTO — Nenhuma proteção CSRF
+
+Não havia token em lugar nenhum. Apagar aluno, resetar senha, alterar perfil e
+subir arquivo podiam ser forjados por uma página de terceiros visitada por quem
+estava logado.
+
+**Correção:** token por sessão, gerado em `Seguranca::tokenCsrf()`, exigido em
+**todo POST** nos seis roteadores e em `banco/data.php`
+(`Seguranca::exigirCsrfEmPost()`). Requisição sem token válido recebe 403 e vai
+para o log.
+
+O token viaja de duas formas:
+
+- **campo oculto `_csrf`** nos formulários HTML, via `Seguranca::campoCsrf()`;
+- **cabeçalho `X-CSRF-Token`** nas chamadas jQuery, injetado por `js/csrf.js`
+  num único `$(document).ajaxSend`.
+
+Optei pelo cabeçalho no lado JavaScript em vez de mexer no corpo da requisição
+porque o projeto usa três formatos diferentes de `data` (objeto, array de
+`{name, value}` e `FormData` no upload) — o cabeçalho funciona igual nos três,
+sem precisar tocar em cada `$.ajax`.
+
+O token é emitido também para visitante anônimo, então login e cadastro em
+`banco/data.php` ficam cobertos.
+
+### 3.17 CRÍTICO — Dez endpoints apagavam dados por GET
+
+Descoberto na segunda rodada. Em `area_professor/app/tudo/` havia dez arquivos
+usando `$_REQUEST`, ou seja, aceitando **GET**. O pior:
+
+```php
+// apagar_pratica.php
+$id_pratica = @$_REQUEST['id_pratica'];
+$sql = "DELETE FROM modelo_pratica WHERE id_modelo_pratica = ? LIMIT 1";
+```
+
+Um professor logado clicando num link bastava para apagar uma prática. Sem
+token, sem confirmação, sem verificar de quem era. O mesmo valia para
+`apagar_disciplina`, `insert_disciplina`, `save_pratica` e `insert_nova_solucao`.
+
+Importante: o `SameSite=Lax` da seção 3.9 **não** cobre esse caso. Ele bloqueia
+o cookie em requisição embutida (um `<img src>` malicioso não funciona) e em
+POST cross-site, mas envia o cookie em navegação de topo por GET — um link
+clicado.
+
+**Correção:** os dez são código morto — nenhum arquivo do projeto os referencia
+(foram substituídos por `app/pratica/delete-pratica`,
+`app/disciplina/delete-disciplina` e pelas rotas `index_new.php?aba=xhr-*`).
+O diretório `area_professor/app/tudo/` inteiro foi removido, o que elimina o
+vetor na raiz em vez de endurecer código que ninguém usa.
+
+### 3.18 ALTO — Senha padrão podia ficar para sempre
+
+**Correção:** `Login::SENHAS_PADRAO` lista as senhas de fábrica (hoje só
+`123456`). Quem entra com uma delas recebe `$_SESSION['trocar_senha']`, e
+`area_aluno/index.php` e `area_professor/index.php` prendem a navegação na aba
+*Meu perfil* até a troca acontecer.
+
+A troca agora também exige no mínimo 8 caracteres e recusa a própria senha
+padrão — antes o formulário de perfil não validava tamanho nenhum.
+
+### 3.19 ALTO — Sem limite de tentativas de login
+
+**Correção:** `classes/LimiteLogin.class.php`, apoiado na tabela
+`login_tentativas`. Cinco falhas no mesmo usuário em 15 minutos bloqueiam aquele
+usuário; um login bem-sucedido zera o contador.
+
+Duas decisões que valem revisão:
+
+- **O controle é por usuário, não por IP.** Numa universidade a turma toda sai
+  pelo mesmo IP (NAT do laboratório de informática), e um limite apertado por IP
+  trancaria todo mundo por causa de um aluno distraído. O limite por IP existe,
+  mas folgado (60 na mesma janela), só como freio contra varredura.
+- **Contrapartida:** dá para travar o login de um colega de propósito, errando
+  a senha dele cinco vezes. Por isso a janela é curta e a mensagem diz
+  claramente o que aconteceu. Para desbloquear na mão, o arquivo de migração traz
+  o `DELETE` pronto.
+
+Atrás do Caddy, `REMOTE_ADDR` é o proxy; `LimiteLogin::ip()` usa o
+`X-Forwarded-For` quando a conexão vem da rede interna do Compose.
+
+**Se a tabela não existir** (migração não rodada), a classe **libera** a
+tentativa e registra o motivo no log. Travar o login de todo mundo porque a
+migração não rodou seria pior que o problema que ela resolve.
+
 ---
 
 ## 4. Arquivos novos
@@ -286,33 +391,22 @@ equivalentes em `Usuario`.
 | `classes/Perfil.class.php` | Constantes de perfil, com a divergência histórica documentada no cabeçalho. |
 | `docker/security.conf` | Endurecimento do Apache (é o que vale na imagem Docker). |
 | `.htaccess`, `uploads/.htaccess` | Mesmas regras para instalação fora do Docker. |
-| `banco/migracoes/2026-09-13-seguranca.sql` | Migração descrita na seção 1.1. |
+| `classes/LimiteLogin.class.php` | Freio de força bruta no login (seção 3.19). |
+| `js/csrf.js` | Injeta o token CSRF em todo POST feito por jQuery (seção 3.16). |
+| `banco/migracoes/2026-09-13-seguranca.sql` | Primeira migração, descrita na seção 1.1. |
+| `banco/migracoes/2026-09-14-csrf-e-rate-limit.sql` | Segunda migração: tabela `login_tentativas`. |
 
 ---
 
 ## 5. NÃO corrigido — pendências
 
-### 5.1 Não existe proteção CSRF (o maior item em aberto)
-
-Não há token em nenhum formulário do projeto. Deletar aluno, resetar senha,
-alterar perfil e subir arquivo continuam forjáveis por um link visitado por um
-professor logado. O `SameSite=Lax` no cookie reduz bastante o alcance, mas não
-substitui token.
-
-Ficou de fora porque é uma mudança transversal, que toca todo formulário e todo
-`$.ajax` do projeto — merece um PR próprio, para poder ser testada em separado.
-
-### 5.2 Sem verificação de propriedade entre professores
+### 5.1 Sem verificação de propriedade entre professores
 
 Um professor ainda pode apagar prática ou disciplina de outro
 (`delete-pratica.php`, `delete-disciplina.php`, `xhr-arquivos-pratica.php` na
 ação `deletar`). Exige decidir o modelo de propriedade — não é só código.
 
-### 5.3 Sem limite de tentativas de login
-
-Força bruta continua livre. Não há bloqueio nem atraso progressivo.
-
-### 5.4 Dois defeitos pré-existentes que o log agora expõe
+### 5.2 Dois defeitos pré-existentes que o log agora expõe
 
 Ambos **anteriores** a esta revisão, causados pelo mesmo bloco comentado em
 `classes/LabJogo.class.php` (linhas 358–500 no arquivo original), que desativa
@@ -326,13 +420,13 @@ sete métodos: `getDisciplinasProfessor`, `insertDisciplina`, `setDisciplina`,
 Não mexi nisso: descomentar código não testado é decisão de quem conhece a
 intenção original. Fica registrado para um próximo PR.
 
-### 5.5 Notices espalhados
+### 5.3 Notices espalhados
 
 Com o log ligado aparecem vários `Undefined index` em
 `area_professor/abas/steps_aula/*`, `aulas.php` e `inicio.php`. Nenhum quebra
 página (todas respondem 200), são ruído no log. Limpeza para depois.
 
-### 5.6 Stack fora de suporte
+### 5.4 Stack fora de suporte
 
 PHP 7.4 (fim de vida 11/2022), MySQL 5.7 (10/2023), jQuery 3.4.1
 (CVE-2020-11022/11023), Bootstrap 4.3.1 (CVE-2019-8331). Sem `composer.json`
@@ -344,7 +438,7 @@ Atenção para a atualização de PHP: `Login::ckeckTipoUser()` fazia
 foi corrigido (nega por padrão), mas há outros pontos do projeto no mesmo
 estilo.
 
-### 5.7 `PDO::ATTR_EMULATE_PREPARES`
+### 5.5 `PDO::ATTR_EMULATE_PREPARES`
 
 Deixei ligado (padrão). Desligar é boa prática, mas muda o comportamento de
 binding em código legado que não consigo testar por completo. Sugestão para um
@@ -392,3 +486,58 @@ Confirmado que **continua funcionando**:
 - imagem em `uploads/` ainda servida normalmente (200, `image/png`)
 - atualização de perfil pelo formulário, com a senha nova gravada em bcrypt
 - logout invalidando a sessão
+
+---
+
+## 7. Verificação da segunda rodada (14/09)
+
+Ambiente reconstruído do zero (`docker compose down -v` + `up --build`).
+
+**CSRF**
+
+- login sem token → 403; com o token da página de login → sucesso
+- `delete-aluno`, `reset-senha-aluno`, `delete-pratica`, `delete-disciplina`
+  sem token → 403 nos quatro; com token → chegam na regra de negócio
+- upload de material sem token → 403; com token → salvo normalmente
+- cadastro de aluno pelo formulário HTML (campo `_csrf`) → funcionou, com a
+  senha temporária exibida
+- as sete rejeições ficaram registradas no log como `CSRF invalido`
+
+**Endpoints apagáveis por GET**
+
+- `?app=tudo&file=apagar_pratica&id_pratica=1` → 404
+- `?app=tudo&file=apagar_disciplina&id_disciplina=1` → 404
+
+**Troca obrigatória de senha padrão**
+
+- `admin` entrando com `123456`: pedir `aba=alunos` ou `aba=inicio` entrega a
+  aba de perfil com o aviso "Troque sua senha para continuar"
+- senha nova com 3 caracteres → recusada; igual à padrão → recusada
+- senha válida → aceita, aviso some e as abas voltam a abrir
+- depois disso, `123456` não entra mais e a senha nova entra
+
+**Limite de tentativas**
+
+- 5 falhas seguidas passam, a 6ª é bloqueada
+- com a senha **correta** durante o bloqueio → continua bloqueado
+- outro usuário, no mesmo IP e no mesmo momento → não afetado
+- login bem-sucedido zera o contador (3 registros → 0)
+
+**Migrações num banco antigo**
+
+MySQL temporário criado a partir do `quimica.sql` do `main` (coluna
+`senha varchar(45)`, `tipo_usuario` com `1=Admin`), com um usuário tipo 1
+inserido para simular uma instalação real. Depois das duas migrações:
+
+- `senha` → `varchar(255)`
+- `tipo_usuario` → `1=Aluno (legado), 2=Professor, 3=Aluno`
+- `login_tentativas` criada
+- hashes SHA-1 preservados
+- usuário tipo 1 **intacto**, porque o passo 3 continua comentado
+- rodando o passo 3 à mão, ele vira tipo 3 como esperado
+
+**Regressão**
+
+Todas as abas de professor e aluno, `lab.php` e os endpoints de `app/jogo/`
+respondem 200. O único erro fatal no log é o `LabJogo::getRegistros()`
+pré-existente descrito em 5.2.

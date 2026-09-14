@@ -3,6 +3,7 @@ include('../lab-config.php');
 include_once(URL_SYSTEM . 'banco/conexao.php');
 Login::$permissao_usuario = Perfil::todos();
 Login::checkUser();
+Seguranca::exigirCsrfEmPost();
 
 // A aba vem da URL. So e aceita se resolver para um arquivo real dentro de
 // area_aluno/abas; qualquer outra coisa volta para o inicio. Antes esta
@@ -11,6 +12,12 @@ $aba_s = (empty($_REQUEST['aba'])) ? "inicio" : $_REQUEST['aba'];
 $aba_arquivo = Seguranca::resolverArquivo(URL_SYSTEM . 'area_aluno/abas', array($aba_s));
 if ($aba_arquivo === null) {
     $aba_s = "inicio";
+    $aba_arquivo = Seguranca::resolverArquivo(URL_SYSTEM . 'area_aluno/abas', array($aba_s));
+}
+
+// Conta ainda com a senha de fabrica: prende na aba de perfil ate trocar.
+if (Login::precisaTrocarSenha() && $aba_s !== 'perfil') {
+    $aba_s = 'perfil';
     $aba_arquivo = Seguranca::resolverArquivo(URL_SYSTEM . 'area_aluno/abas', array($aba_s));
 }
 include(URL_SYSTEM . 'area_aluno/header.php');

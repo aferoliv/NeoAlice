@@ -14,6 +14,8 @@ include "lab-config.php";
   <!-- jquery -->
   <script src="<?php echo URL_SITE; ?>plugins/vendor/jquery/3.4/jquery-3.4.1.min.js"></script>
   <script src="<?php echo URL_SITE; ?>plugins/vendor/jquery/3.4/jquery-migrate-1.4.1.min.js"></script>
+  <?php echo Seguranca::scriptCsrf(); ?>
+  <script src="<?php echo URL_SITE; ?>js/csrf.js"></script>
 
   <link rel="manifest" href="<?php echo URL_SITE; ?>assets/manifest/manifest.json" />
 

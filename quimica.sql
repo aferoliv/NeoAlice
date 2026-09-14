@@ -285,3 +285,20 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2019-11-26 10:53:24
+
+--
+-- Table structure for table `login_tentativas`
+-- Acrescentada na revisão de segurança de 2026-09: registra tentativas de
+-- login que falharam, para o freio de força bruta (classes/LimiteLogin).
+--
+
+DROP TABLE IF EXISTS `login_tentativas`;
+CREATE TABLE `login_tentativas` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `usuario` varchar(45) NOT NULL,
+  `ip` varchar(45) NOT NULL,
+  `criado_em` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_usuario_criado` (`usuario`,`criado_em`),
+  KEY `idx_ip_criado` (`ip`,`criado_em`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
